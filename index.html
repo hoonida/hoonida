@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <script src="./data/jquery-3.2.1.min.js"></script>
+
+    <script id="2d-vertex-shader" type="x-shader/x-vertex">
+			attribute vec2 a_position;
+			void main(){
+				gl_Position = vec4(a_position,0,1);
+			}
+		</script>
+		<!-- black -->
+		<script id="2d-fragment-shader_3" type="x-shader/x-fragment">
+			precision mediump float;
+			uniform float u_time;
+			uniform float u_costime;
+			uniform float u_sintime;
+			uniform vec2 u_resolution;
+			uniform float u_mouse;
+			uniform float u_mousey;
+
+			float map(vec3 p)
+			{
+			    vec3 q = fract(p * 0.5) * 2.0 - 1.0;
+				q.y = q.x * 0.5;
+
+				return length(q) - 0.3;
+			}
+
+			float trace(vec3 origin, vec3 ray)
+			{
+			    float t = 0.0;
+			    for (int i = 0; i < 18; i++) {
+			        vec3 p = origin + ray * t;
+			        float d = map(p);
+			        t += d * 0.5;
+			    }
+			    return t;
+			}
+
+
+			void main( void ) {
+				float time = u_time * 0.2;
+
+				vec2 uv = gl_FragCoord.xy /10. - 65.;
+			    uv = uv * 2.0 - 3.0;
+
+			    // Aspect ratio.
+			    uv.x *= 600. / 200.;
+
+			    // RGB
+			    vec3 c;
+
+			    float s1 = sin(time * 0.1);
+
+			    // Compute RGB separately.
+			    for (int i = 0; i < 3; i++) {
+
+			        // Move origin.
+			        vec3 origin = vec3(1.5, 1.0, time/10.);
+
+			        // Some kind of chromatic aberration.
+			        uv.x *= 0.97;
+			        uv.y *= 0.93;
+
+			    	vec3 ray = normalize(vec3(uv, 0.5));
+
+			        // Spiral rotation (XY).
+			    	float the = time + length(uv) * s1;
+			    	ray.xy *= mat2(cos(the), -sin(the), sin(the), cos(the));
+
+			        // Normal rotation (XZ).
+			        the = time * 0.3;
+			        ray.xz *= mat2(u_mouse *cos(the), -sin(the)*u_mousey+1., u_mouse *sin(the), cos(the)*u_mousey+1.);
+
+			        float t = trace(origin, ray);
+
+			        // Visualize depth.
+			    	c[i] = 1.0 / (1.0 + t * t * 0.07);
+			    }
+
+
+				gl_FragColor = vec4(c*  vec3(0.6, 0.6, 0.6), 1.0);
+			}
+		</script>
+		<!-- rainbow -->
+		<script id="2d-fragment-shader_2" type="x-shader/x-fragment">
+      precision mediump float;
+      uniform float u_time;
+      uniform float u_costime;
+      uniform float u_sintime;
+      uniform vec2 u_resolution;
+      uniform float u_mouse;
+      uniform float u_mousey;
+
+      vec2 v(vec2 p,float s){
+        vec2 pos = vec2(1.0,1.0);//gl_FragCoord.xy;
+        return vec2(sin(s*p.y+pos.y*1.1423),cos(s*p.x+pos.x*1.4235));	//advection vector field+u_time*0.263423-u_time*0.32364263
+      }
+
+      vec2 RK4(vec2 p,float s, float h){
+        vec2 k1 = v(p,s);
+        vec2 k2 = v(p+0.5*h*k1,s);
+        vec2 k3 = v(p+0.5*h*k2,s);
+        vec2 k4 = v(p+h*k3,s);
+        return h/3.*(0.5*k1+k2+k3+0.5*k4);
+      }
+
+      vec3 rainbow(float hue){
+        return abs(mod(hue * .9 + vec3(5.0+cos(u_time*0.2), 3.0, 2.2), 6.0) - 4.0) - 1.5;
+      }
+
+      void main( void )
+      {
+        vec2 uv = 1.5*gl_FragCoord.xy/100.0+sin(gl_FragCoord.x/1500.)+cos(gl_FragCoord.y/140.);
+            float s = 2.1;
+        float h = 1.4;
+            for(int i = 0; i<30; i++) {
+          float hh = h * log(1./(exp(2.*sin(float(i) * 0.4))))/5.;//u_time*0.0018345
+          uv+=RK4(uv,s,hh);
+          float factor = 1.2;
+          s*=factor;
+          h/=factor;
+            }
+        gl_FragColor = vec4(rainbow(u_mouse+u_mousey+7.+ u_time*0.8 +floor(length( uv)*(-0.9)*15.)/150.),0.1); //centered rainbow with 10 visible rings
+
+      }
+		</script>
+		<!-- gold -->
+		<script id="2d-fragment-shader" type="x-shader/x-fragment">
+			precision mediump float;
+			uniform float u_time;
+			uniform float u_costime;
+			uniform float u_sintime;
+			uniform vec2 u_resolution;
+			uniform float u_mouse;
+			uniform float u_mousey;
+
+
+			float random (in vec2 st) {
+			    return fract(sin(dot(st.xy,
+			                         vec2(12.9898,78.233)))
+			                * 43758.5453123);
+			}
+
+			// The MIT License
+			// Copyright © 2013 Inigo Quilez
+			float noise( in vec2 p )
+			{
+			    vec2 i = floor( p );
+			    vec2 f = fract( p );
+
+			    vec2 u = f*f*(3.0-2.0*f);
+
+			    return mix( mix( random( i + vec2(0.0,0.0) ),
+			                     random( i + vec2(1.0,0.0) ), u.x),
+			                mix( random( i + vec2(0.0,1.0) ),
+			                     random( i + vec2(1.0,1.0) ), u.x), u.y);
+			}
+
+			// Author: https://twitter.com/c0de4
+			void main( void ) {
+
+			  vec2 p = ( gl_FragCoord.xy * 2.0 - 100. ) / 500.;
+
+				float color = 0.0;
+
+				for(float i = 0.; i < 4.; i++) {
+					float j = i + 1.0;
+					p += vec2(noise(p+j)*u_mouse/4.-cos(u_mouse/3.+1.5)+noise(vec2(u_time/3.))*.1, noise(p*j)-cos(u_time/2.*j) *(u_mousey*3.0)* .21 );
+					vec2 q = vec2(noise(vec2(p+j)) );
+					float a = length(p-q);
+					color += .02/length(p-a);
+				}
+
+			  gl_FragColor = vec4( vec3( color*4. )+vec3(0.4,.2,-.2), 1.0 );
+
+			}
+
+
+		</script>
+
+
+  </head>
+  <body>
+    <div class="menu" id="top">
+      <a id="title" href="#"><div>
+        orchestra jewerly
+      </div></a>
+      <div id="ver" style="display:none;">
+        ver 0.5
+      </div>
+      <div id="menu_left">
+        <a class="list" href="#"><div >about</div></a>
+        <a class="list" href="#"> <div>credits</div></a>
+      </div>
+    </div>
+    <div class="menu" id="left">
+      <a href="http://www.hoonida.com/"><div id="to_hoonida">
+        HOONIDA LABS
+      </div></a>
+    </div>
+    <div class="menu" id="right">
+      <a href="javascript:void(0);"><div id="howto">
+        HOW TO PLAY
+      </div></a>
+    </div>
+    <div class="pdm" id="b1">
+      <a href="javascript:void(0);"><div>
+        circle
+      </div></a>
+      <svg>
+        <line class="pline" x1 = "0" y1="0" x2 ="0" y2="3000" />
+      </svg>
+    </div>
+    <div class="pdm" id="b2">
+      <a href="javascript:void(0);"><div>
+        rectangle
+      </div></a>
+      <svg>
+        <line class="pline" x1 = "0" y1="0" x2 ="0" y2="3000" />
+      </svg>
+    </div>
+    <div class="pdm" id="b3">
+      <a href="javascript:void(0);"><div>
+        pyramid
+      </div></a>
+      <svg>
+        <line class="pline" x1 = "0" y1="0" x2 ="0" y2="3000" />
+      </svg>
+    </div>
+    
+    <div class="content" id="vids">
+      <div id="keyinstruction">
+        <div id="bundle3"><span>z</span><span class="long_line"></span><span style="margin-left:20px;">x.</span></div>
+        <div id="bundle1"><span>q.   </span><span style="margin-left:20px;">w</span><span class="long_line"></span></div>
+        <div id="bundle2"><span>a.   </span><span style="margin-left:20px;">s.</span></div>
+      </div>
+      <div class="vidNemo">
+        <video id="v3" height="100%" autoplay="autoplay" loop>
+					<source src="./data/p3_d1.mp4" type="video/mp4" />
+				</video>
+      </div>
+      <div class="vidNemo">
+        <video id="v1" height="100%" autoplay="autoplay" loop>
+					<source src="./data/p1_d1.mp4" type="video/mp4" />
+				</video>
+      </div>
+      <div class="vidNemo">
+        <video id="v2" height="100%" autoplay="autoplay" loop>
+					<source src="./data/p2_d1.mp4" type="video/mp4" />
+				</video>
+      </div>
+    </div>
+    <div class="content" id="cirCon">
+      <canvas id="gl" style="top:0px;"></canvas>
+      <div class="box">
+        <div id="boxWrap">
+          <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 402 427" style="enable-background:new 0 0 402 427;" xml:space="preserve" height="400px" width="400px">
+            <style type="text/css">
+              #Layer_1{
+                position: absolute;
+                top:50%;
+                left:3%;
+                transform:translateY(-50%);
+                opacity: 0;
+              }
+
+            	.st0{
+                fill:none;stroke:#1A1A1C;stroke-miterlimit:10;
+                stroke-dasharray: 1200;
+              }
+              @import "compass/css3";
+
+              @keyframes dash {
+                0%{
+                  stroke-dashoffset:000;
+                }
+                100% {
+                  stroke-dashoffset:1200;
+                }
+              }
+            </style>
+            <g>
+              <line class="st0" x1="18.7" y1="255" x2="247.7" y2="305"/>
+            	<g>
+            		<polyline class="st0" points="18.7,255 155.7,363 381.7,409 321.7,15 		"/>
+            		<polyline class="st0" points="321.7,15 247.7,305 381.7,409 		"/>
+            		<path class="st0" d="M220.7,103c-12,13-27,45-4,57s55-10,65-31s13-43-4-48S232.7,90,220.7,103z"/>
+            	</g>
+            </g>
+            <line class="st0" x1="321.7" y1="15" x2="18.7" y2="255"/>
+          </svg>
+          <div class="boxText" id="btpy">
+            <div class="bt1">표면은 홀로그램으로 마감 되어있고 형태는 다이아몬드를 단순화 시킨 사각뿔 형상에 X,Y각 축에 사운드가 맵핑되어 있다. 그리고 두 축에 있는 사운드는 착용자의 여러 손동작에 의해 연주된다.
+            </div>
+            <div class="bt2">
+              200mm x 200mm <br>
+              120g<br>
+              Hologram foil
+            </div>
+          </div>
+          <svg version="1.1" id="Layer_2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 450 450" style="enable-background:new 0 0 450 450;" xml:space="preserve">
+            <style type="text/css">
+            	.st1{
+                fill:none;stroke:#1A1A1C;stroke-miterlimit:10;
+                stroke-dasharray: 1200;
+              }
+              #Layer_2{
+                width: 450px;
+                height:450px;
+                top:50%;
+                left:3%;
+                transform:translateY(-50%);
+                position: absolute;
+                opacity: 0;
+              }
+
+              @import "compass/css3";
+
+              @keyframes dash {
+                0%{
+                  stroke-dashoffset:396;
+                }
+                100% {
+                  stroke-dashoffset:1200;
+                }
+              }
+
+              @keyframes dashR {
+                0%{
+                  stroke-dashoffset:1200;
+                }
+                100% {
+                  stroke-dashoffset:136;
+                }
+              }
+            </style>
+            <g>
+            	<path class="st1" d="M51.5,115.6l-3.2,2l-18,41.9l20.9,9c0,0,15.4,5.6,13.1,17.3c-1.7,8.6-7.1,17.1-10.5,20.8
+            		c-6.5,7.2-24,43.1,4.1,77.4c21.1,25.8,51.6,29.8,51.6,29.8s37,7,54.6-14.2c20-24.1,18.6-29.8,19.4-36.1c0.6-5.4,5.8-14.4,12.5-14.2
+            		c6.7,0.2,9.4,1.7,19.1,6.7c9.7,5,175.5,78.1,175.5,78.1l21.9-40.9l-1.7-4.5"/>
+            	<polyline class="st1" points="410.7,288.7 414.9,288.3 432.2,252.4 402.5,220.2 69.5,73.8 50.8,112.8 51.5,115.6 	"/>
+            	<polyline class="st1" points="410.7,288.7 379.3,260.9 51.5,115.6 	"/>
+            	<path class="st1" d="M98.6,191.9c0,0-5.3-2.1-12.8,2.4c-10.4,6.3-24.8,13.1-30.3,36.3s1.2,46.4,27,57.9s55.3-4.6,65.6-25.2
+            		c10.3-20.6,7.4-43-0.3-50.3C140,205.7,98.6,191.9,98.6,191.9z"/>
+            	<path class="st1" d="M124.1,201.2c0,0-24.4,3.1-37.6,24.4s-25,49.5-5,62.4"/>
+            	<path class="st1" d="M62.3,289c0,0,24.4,23.7,59.8,10.1c31.1-12,40.5-39.3,42.9-49.5c2.4-10.3,10-19.3,19.3-18.5
+            		c9.3,0.8,172.6,73.3,172.6,73.3l33.7,29.7"/>
+            </g>
+          </svg>
+          <div class="boxText" id="btrec">
+            <div class="bt1">
+              표면은 한국전통의 옻칠과 단면은 금박으로 마감 되어있고  형태는 직사각형에 X,Y각 축에 사운드가 맵핑되어 있다. 그리고 두 축에 있는 사운드는 착용자의 여러 손동작에 의해 연주된다.
+            </div>
+            <div class="bt2">
+              253mm x 83mm <br>
+              75g<br>
+              korean lacquering white & gold foil
+            </div>
+          </div>
+          <svg version="1.1" id="Layer_3" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 450 450" style="enable-background:new 0 0 450 450;" xml:space="preserve">
+            <style type="text/css">
+            	.st2{
+                fill:none;stroke:#1A1A1C;stroke-miterlimit:10;
+                stroke-dasharray: 1200;
+              }
+              #Layer_3{
+                width: 450px;
+                height:450px;
+                top: 60%;
+                right: 15%;
+                transform:translateY(-50%);
+                position: absolute;
+                opacity: 0;
+              }
+
+            </style>
+            <g>
+            	<g>
+            		<path class="st2" d="M262.4,99.8c16.3-2,32.6-1.2,48.7,0.5c18.1,2,35.7,6.2,52.2,13.9c13.1,6.1,24.9,14.1,33.8,25.8
+            			c6.5,8.6,10.2,18.5,13.8,28.6c3.3,9.2,5.2,18.6,5.6,28.3c0.1,2.7,1.5,5.2,1.7,7.9c0.6,9-1.2,19.1-1.6,21.5
+            			c-0.4,2.4-1.4,6.9-4.4,14.9c-3,8-9.8,20.7-16.4,30.6c-6.6,9.9-14.3,18.8-22.9,26.8c-8,7.5-16.5,14.5-25.3,21.1
+            			c-17.6,13-36.9,23.2-56.9,31.9c-6.8,2.9-13.7,5.4-20.8,7.5c-7.8,2.3-15.5,5-23.3,7.5c-4.4,1.4-8.7,2.6-13.1,3.7
+            			c-9.6,2.3-25,5.3-29,5.9c-4.1,0.5-22,1.6-27.1,1.9c-5.1,0.3-22-0.8-33-1.9c-10.6-1-21.1-3-31.2-6.5c-12.2-4.1-24.4-8.5-35.7-14.9
+            			c-9.8-5.6-18.4-12.9-26.1-21.2c-8.8-9.4-14.6-20.5-18.4-32.5c-2.7-8.6-6.5-16.9-8.2-25.8c-2-10.6-1.5-21.2,1.2-31.6
+            			c3.3-13,9.4-24.7,17.3-35.6c6.4-8.9,13.2-17.4,21.3-24.7c6.9-6.3,13.8-12.5,21.3-18c8.4-6.2,16.9-12,25.8-17.3
+            			c5.6-3.3,11.5-6.1,17.1-9.3c7.5-4.2,15.5-7.4,23.2-11.3c5.4-2.7,11.3-4.3,17-6.5c14.4-5.8,29.3-9.9,44.3-13.6
+            			C229.5,103.4,245.9,100.6,262.4,99.8z"/>
+            	</g>
+            	<path class="st2" d="M26.4,280.5c3.3,14.3,63.7,99.4,222.9,46.1c168.5-56.5,164.2-152.4,154.3-175.9"/>
+            	<path class="st2" d="M33.1,300.6c0,0,15.6,55.5,126.8,59.2c111.2,3.7,206.6-72.4,227-97.1c18-21.7,32.7-50.9,28.9-74.6"/>
+            </g>
+          </svg>
+          <div class="boxText" id="btcir">
+            <div class="bt1">
+              표면은 한국전통의 옻칠로 블랙으로 마감 되어있고 형태는 원판형에 X,Y각 축에 사운드가 맵핑되어 있다. 그리고 두 축에 있는 사운드는 착용자의 여러 손동작에 의해 연주된다.
+            </div>
+            <div class="bt2">
+              253mm x 253mm <br>
+              114g<br>
+              Korean lacquering matt black
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="content" id="about">
+      <div id="title" style="width:100%;">
+      <div style="display:inline-block">Orchestra Jewerly</div><div id="about_lang"><span id="ko_about">ko</span>/<span id="en_about">en</span></div>
+      </div>
+      <div id="about_close"></div>
+      <div id="con">
+        <div id="kor">
+          <p>인류는 오래전부터 자신을 특별하게 포장하려는 욕망이 있었다. 그러한 욕망이 장신구를 만드는 방법과 과정을 통해 표출 되기도 한다. 이번 작업은 자기표현의 역할을 했던 기존에 장신구의 시각적 기능에서 청각적 기능으로 변환시킨다. 청각적으로 자기표현을 하는 새로운 악기이자 장신구를 ‘미래의 공예(Next craft)’로써 제안하려 한다.</p>
+          <p>Hoonida-labs의 첫 번째 실험으로, 신체 움직임을 소리로 표현하기 위한 사운드 장신구라는 형식으로 프로토타입을 제작하여 그 가능성을 보여 주려고 한다. 
+프로덕트의 구성요소로는 소리를 컨트롤하는 쥬얼리와 스마트폰 앱이 연동되는 구조이다. "Orchestra Jewelry"는 착용한 손의 움직임에 따라 음이 발생한다. 사운드 장신구를 착용한 사람들이 한공간에서 소리의 레이어를 만들어 가면서 몸짓과 소리가 하나 되어, 다양한 동적 오케스트라를 만들어 내는 작품이다.  </p>
+        </div>
+        <div id="eng" style="display:none;">
+          <p>
+            Hoonida Kim presents a new type of jewelry. Mankind has long held a desire to adorn himself as a form of self-expression. Such desires often manifest in the methods and processes of making jewelry. The artist shifts the jewelry’s function of self-expression from visual to acoustic. The artist calls this new kind of musical instrument and jewelry that enables wearers to acoustically express themselves the “next craft.” To experiment with the concept, Kim created Hoonida Labs. As his first experiment, he produced wearable sound jewelry that expresses the body’s movement through sound.
+          </p>
+          <p>
+            A piece of jewelry that controls sound is linked to a smartphone app. Sound is generated by the movement of the hand, and the sound layers build up with the number of people around the wearer of Orchestra Jewelry. The jewelry plays music according to the movement of the people. The viewers will consider what changes the artist’s conceptual shift might bring to craft, the value and potential of the work.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="content" id="credit">
+      <div id="title">
+        credits
+      </div>
+      <div id="credit_close"></div>
+      <div id="wrap">
+      <div id="ll">
+        director<br>
+        product<br>
+        korean lacquering<br>
+        web design<br>
+      </div>
+      <div id="lr">
+        <a id="Hoonida" href="http://hoonida.com/" target="_blank">Hoonida Kim</a><br>
+        Hoonida Kim, Hyun Je<br>
+        Chang young jun<br>
+        <a id="velcro" href="http://studio-velcro.com/" target="_blank">studio velcro</a>
+      </div>
+      </div>
+    </div>
+    <script src="gl.js"></script>
+    <script src="main.js"></script>
+
+  </body>
+</html>
