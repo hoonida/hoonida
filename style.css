@@ -61,9 +61,14 @@ a{
 #keyinstruction span{
   display:inline-block
 }
+#Hoonida:hover{
+  text-decoration:underline;
+}
+
 #velcro:hover{
   text-decoration:underline;
 }
+
 #vids{
   font-size: 0px;
   transition: 1s;
